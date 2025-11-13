@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>コミュニティ・リソース・グラフ - ワイヤーフレーム</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 30px;
+        }
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        .tabs {
+            display: flex;
+            background: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
+        }
+        .tab {
+            padding: 15px 30px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 14px;
+            color: #666;
+            transition: all 0.3s;
+            border-bottom: 3px solid transparent;
+        }
+        .tab:hover {
+            background: #e9ecef;
+        }
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+            font-weight: 600;
+        }
+        .content {
+            padding: 30px;
+        }
+        .screen {
+            display: none;
+        }
+        .screen.active {
+            display: block;
+        }
+        .search-box {
+            margin-bottom: 30px;
+        }
+        .search-input {
+            width: 100%;
+            padding: 15px;
+            font-size: 16px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            transition: border-color 0.3s;
+        }
+        .search-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .filter-tags {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+        .tag {
+            padding: 8px 15px;
+            background: #e9ecef;
+            border: none;
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .tag:hover, .tag.active {
+            background: #667eea;
+            color: white;
+        }
+        .resource-card {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .resource-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+        .resource-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .resource-meta {
+            display: flex;
+            gap: 15px;
+            color: #666;
+            font-size: 13px;
+            margin-bottom: 10px;
+        }
+        .resource-desc {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+        .resource-tags {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .resource-tag {
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+        }
+        .form-input, .form-textarea, .form-select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #dee2e6;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+        .form-textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+        .form-input:focus, .form-textarea:focus, .form-select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+        .btn-secondary {
+            background: #e9ecef;
+            color: #666;
+        }
+        .btn-secondary:hover {
+            background: #dee2e6;
+        }
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .action-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+        .action-card:hover {
+            transform: translateY(-4px);
+        }
+        .action-card h3 {
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+        .action-card p {
+            font-size: 13px;
+            opacity: 0.9;
+        }
+        .detail-view {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+        }
+        .detail-header {
+            border-bottom: 2px solid #dee2e6;
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+        }
+        .detail-title {
+            font-size: 28px;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .detail-section {
+            margin-bottom: 25px;
+        }
+        .detail-section h3 {
+            font-size: 16px;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        .feedback-list {
+            border-left: 3px solid #667eea;
+            padding-left: 15px;
+        }
+        .feedback-item {
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+        .feedback-author {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        .connection-graph {
+            background: #f8f9fa;
+            border: 2px dashed #dee2e6;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            color: #666;
+        }
+        .need-card {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 6px;
+        }
+        .need-title {
+            font-weight: 600;
+            color: #856404;
+            margin-bottom: 5px;
+        }
+        .need-desc {
+            color: #856404;
+            font-size: 14px;
+        }
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+        }
+        .info-box h4 {
+            color: #1976d2;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        .info-box p {
+            color: #0d47a1;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌐 コミュニティ・リソース・グラフ</h1>
+            <p>地域の「見えない資産」を可視化・共有するプラットフォーム</p>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showScreen('home')">🏠 ホーム</button>
+            <button class="tab" onclick="showScreen('search')">🔍 資源を探す</button>
+            <button class="tab" onclick="showScreen('add')">➕ 資源を登録</button>
+            <button class="tab" onclick="showScreen('needs')">💡 ニーズを記録</button>
+            <button class="tab" onclick="showScreen('detail')">📄 詳細表示例</button>
+        </div>
+
+        <!-- ホーム画面 -->
+        <div id="home" class="content screen active">
+            <div class="info-box">
+                <h4>💡 このシステムの使い方</h4>
+                <p>支援活動の中で出会った「使える場所・人・情報」を記録してください。小さな情報でもOK！みんなで少しずつ追加することで、地域の資源マップが育っていきます。</p>
+            </div>
+
+            <div class="quick-actions">
+                <div class="action-card" onclick="showScreen('search')">
+                    <h3>🔍 資源を探す</h3>
+                    <p>「こんな場所ないかな？」と思ったら検索してみましょう</p>
+                </div>
+                <div class="action-card" onclick="showScreen('add')">
+                    <h3>➕ 資源を登録</h3>
+                    <p>あなたが知っている「使える場所」を教えてください</p>
+                </div>
+                <div class="action-card" onclick="showScreen('needs')">
+                    <h3>💡 ニーズを記録</h3>
+                    <p>見つからない資源を記録。誰かが情報を追加してくれるかも</p>
+                </div>
+            </div>
+
+            <h2 style="margin-bottom: 15px;">📊 最近の活動</h2>
+            <div class="resource-card">
+                <div class="resource-title">🆕 新しく追加された資源: 3件</div>
+                <div class="resource-desc">「静かなカフェ 月のしずく」「バリアフリー対応 市民図書館別館」「手話対応OK 美容室ハートフル」</div>
+            </div>
+            <div class="resource-card">
+                <div class="resource-title">💬 新しいフィードバック: 5件</div>
+                <div class="resource-desc">みなさんの「使ってみた」体験が追加されています</div>
+            </div>
+            <div class="resource-card">
+                <div class="resource-title">🔗 新しいつながり: 2件</div>
+                <div class="resource-desc">資源同士の関係性が増えています</div>
+            </div>
+        </div>
+
+        <!-- 検索画面 -->
+        <div id="search" class="content screen">
+            <div class="search-box">
+                <input type="text" class="search-input" placeholder="例: 静かなカフェ、バリアフリー、手話対応、作業実習...">
+                <div class="filter-tags">
+                    <button class="tag">🏪 場所・施設</button>
+                    <button class="tag">👥 人・スタッフ</button>
+                    <button class="tag">🎯 活動・プログラム</button>
+                    <button class="tag">♿ バリアフリー</button>
+                    <button class="tag">🤝 理解がある</button>
+                    <button class="tag">🔇 静か</button>
+                    <button class="tag">💰 無料・低価格</button>
+                </div>
+            </div>
+
+            <h3 style="margin-bottom: 15px;">検索結果: 12件</h3>
+
+            <div class="resource-card">
+                <div class="resource-title">カフェ「月のしずく」</div>
+                <div class="resource-meta">
+                    <span>📍 小倉北区堺町</span>
+                    <span>👤 登録者: 田中支援員</span>
+                    <span>⭐ フィードバック: 3件</span>
+                </div>
+                <div class="resource-desc">
+                    静かで落ち着いた雰囲気のカフェ。マスターが障害のある方への理解がある。面談や作業後の振り返りに使える。平日午前は空いている。
+                </div>
+                <div class="resource-tags">
+                    <span class="resource-tag">#静か</span>
+                    <span class="resource-tag">#理解がある</span>
+                    <span class="resource-tag">#面談に使える</span>
+                    <span class="resource-tag">#平日午前が空いている</span>
+                </div>
+            </div>
+
+            <div class="resource-card">
+                <div class="resource-title">市民図書館 別館</div>
+                <div class="resource-meta">
+                    <span>📍 戸畑区</span>
+                    <span>👤 登録者: 佐藤相談員</span>
+                    <span>⭐ フィードバック: 5件</span>
+                </div>
+                <div class="resource-desc">
+                    車椅子対応で静かな学習室あり。司書さんが優しく、読書好きな方の居場所としても。月2回「ゆっくり読書会」開催。
+                </div>
+                <div class="resource-tags">
+                    <span class="resource-tag">#バリアフリー</span>
+                    <span class="resource-tag">#静か</span>
+                    <span class="resource-tag">#居場所</span>
+                    <span class="resource-tag">#定期プログラムあり</span>
+                </div>
+            </div>
+
+            <div class="resource-card">
+                <div class="resource-title">NPO法人「わかばの会」</div>
+                <div class="resource-meta">
+                    <span>📍 八幡東区</span>
+                    <span>👤 登録者: 山田支援員</span>
+                    <span>⭐ フィードバック: 7件</span>
+                </div>
+                <div class="resource-desc">
+                    軽作業の体験実習を受け入れてくれる。スタッフが丁寧で、失敗しても大丈夫な雰囲気。週1回から相談可能。
+                </div>
+                <div class="resource-tags">
+                    <span class="resource-tag">#作業実習</span>
+                    <span class="resource-tag">#理解がある</span>
+                    <span class="resource-tag">#柔軟な対応</span>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 6px; text-align: center; color: #666;">
+                💡 お探しの資源が見つかりませんでしたか？ <button class="btn btn-secondary" onclick="showScreen('needs')" style="display: inline; padding: 8px 15px;">ニーズを記録する</button>
+            </div>
+        </div>
+
+        <!-- 登録画面 -->
+        <div id="add" class="content screen">
+            <div class="info-box">
+                <h4>✨ 小さな情報でも大丈夫！</h4>
+                <p>「ここのカフェのマスターが優しかった」「この公園は人が少なくて落ち着く」など、あなたが知っている「ちょっといい場所」を教えてください。完璧な情報でなくてOKです。</p>
+            </div>
+
+            <form>
+                <div class="form-group">
+                    <label class="form-label">資源の種類</label>
+                    <select class="form-select">
+                        <option>場所・施設（カフェ、公園、図書館など）</option>
+                        <option>人・スタッフ（理解のある店主、専門家など）</option>
+                        <option>活動・プログラム（イベント、教室など）</option>
+                        <option>情報・制度（使える制度、コツなど）</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">名前・名称 <span style="color: #dc3545;">*</span></label>
+                    <input type="text" class="form-input" placeholder="例: カフェ「月のしずく」">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">場所（住所・エリア）</label>
+                    <input type="text" class="form-input" placeholder="例: 小倉北区堺町1-2-3">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">どんな資源ですか？ <span style="color: #dc3545;">*</span></label>
+                    <textarea class="form-textarea" placeholder="例: 静かで落ち着いた雰囲気のカフェ。マスターが障害のある方への理解があり、ゆっくり過ごせる。面談にも使える。"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">タグ（複数選択可）</label>
+                    <div class="filter-tags">
+                        <button type="button" class="tag">🔇 静か</button>
+                        <button type="button" class="tag">♿ バリアフリー</button>
+                        <button type="button" class="tag">🤝 理解がある</button>
+                        <button type="button" class="tag">💰 無料・低価格</button>
+                        <button type="button" class="tag">🚃 駅から近い</button>
+                        <button type="button" class="tag">🅿️ 駐車場あり</button>
+                        <button type="button" class="tag">👥 人が少ない</button>
+                        <button type="button" class="tag">🍽️ 飲食OK</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">連絡先・営業時間など（任意）</label>
+                    <textarea class="form-textarea" placeholder="知っている範囲で構いません"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">関連する資源（つながり）</label>
+                    <input type="text" class="form-input" placeholder="例: NPO法人わかばの会（作業実習後に立ち寄れる）">
+                    <small style="color: #666; display: block; margin-top: 5px;">この資源と関係のある他の資源があれば教えてください</small>
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                    <button type="submit" class="btn btn-primary">✅ 登録する</button>
+                    <button type="button" class="btn btn-secondary">キャンセル</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- ニーズ記録画面 -->
+        <div id="needs" class="content screen">
+            <div class="info-box">
+                <h4>💡 「探したけど見つからない」も大切な情報</h4>
+                <p>見つからなかったニーズを記録しておくと、後から誰かが「それならこの場所があるよ！」と教えてくれるかもしれません。地域に必要な資源を可視化することにもつながります。</p>
+            </div>
+
+            <form>
+                <div class="form-group">
+                    <label class="form-label">どんな資源を探していますか？ <span style="color: #dc3545;">*</span></label>
+                    <textarea class="form-textarea" placeholder="例: 引きこもりの20代男性が気軽に立ち寄れる場所。人が少なく、プレッシャーのない環境。ゲームやマンガがあると嬉しい。"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">希望するエリア</label>
+                    <input type="text" class="form-input" placeholder="例: 小倉北区、または小倉南区">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">誰のための資源ですか？（任意）</label>
+                    <input type="text" class="form-input" placeholder="例: 20代男性、障害特性: 人混みが苦手">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">どんな目的で使いたいですか？（任意）</label>
+                    <textarea class="form-textarea" placeholder="例: まずは週1回、居場所として利用。慣れてきたら軽作業などにチャレンジできると理想的。"></textarea>
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                    <button type="submit" class="btn btn-primary">📝 ニーズを記録</button>
+                    <button type="button" class="btn btn-secondary">キャンセル</button>
+                </div>
+            </form>
+
+            <h3 style="margin: 40px 0 15px 0;">📋 記録されているニーズ</h3>
+            <div class="need-card">
+                <div class="need-title">🔍 手話対応できる医療機関（耳鼻科・内科）</div>
+                <div class="need-desc">エリア: 八幡東区 | 記録日: 2024-11-05 | 記録者: 田中支援員</div>
+            </div>
+            <div class="need-card">
+                <div class="need-title">🔍 発達障害の子ども向けのスポーツ教室</div>
+                <div class="need-desc">エリア: 門司区 | 記録日: 2024-11-08 | 記録者: 佐藤相談員</div>
+            </div>
+            <div class="need-card">
+                <div class="need-title">🔍 車椅子で入れる美容室（カット＋顔そり）</div>
+                <div class="need-desc">エリア: 小倉南区 | 記録日: 2024-11-10 | 記録者: 山田支援員</div>
+            </div>
+        </div>
+
+        <!-- 詳細表示画面 -->
+        <div id="detail" class="content screen">
+            <div class="detail-view">
+                <div class="detail-header">
+                    <div class="detail-title">カフェ「月のしずく」</div>
+                    <div class="resource-meta">
+                        <span>📍 小倉北区堺町1-2-3</span>
+                        <span>👤 登録者: 田中支援員</span>
+                        <span>📅 登録日: 2024-10-15</span>
+                    </div>
+                    <div class="resource-tags" style="margin-top: 10px;">
+                        <span class="resource-tag">#静か</span>
+                        <span class="resource-tag">#理解がある</span>
+                        <span class="resource-tag">#面談に使える</span>
+                        <span class="resource-tag">#平日午前が空いている</span>
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <h3>📝 基本情報</h3>
+                    <p>静かで落ち着いた雰囲気のカフェ。マスターが障害のある方への理解があり、ゆっくり過ごせる。面談や作業後の振り返りにも使える。平日午前は特に空いている。</p>
+                </div>
+
+                <div class="detail-section">
+                    <h3>📞 連絡先・営業時間</h3>
+                    <p>営業時間: 9:00-18:00（月曜定休）<br>
+                    電話: 093-XXX-XXXX<br>
+                    駐車場: 店舗前に2台分あり</p>
+                </div>
+
+                <div class="detail-section">
+                    <h3>💬 利用者のフィードバック（3件）</h3>
+                    <div class="feedback-list">
+                        <div class="feedback-item">
+                            <div class="feedback-author">佐藤相談員 - 2024-11-01</div>
+                            <p>Bさんとの面談で利用。マスターが気を遣ってくれて、奥の静かな席を案内してくれた。Bさんも「落ち着く」と言っていた。コーヒーも美味しい。</p>
+                        </div>
+                        <div class="feedback-item">
+                            <div class="feedback-author">山田支援員 - 2024-10-28</div>
+                            <p>作業実習後の振り返りで利用。Cさんが「また来たい」と言うくらい居心地が良かった様子。マスターとCさんが少し話していた。</p>
+                        </div>
+                        <div class="feedback-item">
+                            <div class="feedback-author">鈴木相談員 - 2024-10-20</div>
+                            <p>初めて利用。平日10時頃だったが他のお客さんが少なく、静かで良かった。Wi-Fiもあるので記録作業もできる。</p>
+                        </div>
+                    </div>
+                    <button class="btn btn-secondary" style="margin-top: 10px;">➕ フィードバックを追加</button>
+                </div>
+
+                <div class="detail-section">
+                    <h3>🔗 関連する資源（つながり）</h3>
+                    <div class="connection-graph">
+                        <p style="margin-bottom: 15px;">この資源は以下と関連しています:</p>
+                        <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                            <div class="resource-tag" style="padding: 8px 15px; cursor: pointer;">NPO法人わかばの会（徒歩5分）</div>
+                            <div class="resource-tag" style="padding: 8px 15px; cursor: pointer;">市民図書館別館（徒歩10分）</div>
+                        </div>
+                    </div>
+                    <button class="btn btn-secondary" style="margin-top: 10px;">🔗 つながりを追加</button>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 30px;">
+                    <button class="btn btn-secondary">✏️ 情報を編集</button>
+                    <button class="btn btn-secondary">🚩 問題を報告</button>
+                    <button class="btn btn-secondary" onclick="showScreen('search')">← 検索に戻る</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showScreen(screenId) {
+            // Hide all screens
+            const screens = document.querySelectorAll('.screen');
+            screens.forEach(screen => screen.classList.remove('active'));
+            
+            // Remove active from all tabs
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => tab.classList.remove('active'));
+            
+            // Show selected screen
+            document.getElementById(screenId).classList.add('active');
+            
+            // Activate corresponding tab
+            const tabIndex = ['home', 'search', 'add', 'needs', 'detail'].indexOf(screenId);
+            if (tabIndex !== -1) {
+                tabs[tabIndex].classList.add('active');
+            }
+        }
+
+        // Tag toggle functionality
+        document.querySelectorAll('.tag').forEach(tag => {
+            tag.addEventListener('click', function() {
+                this.classList.toggle('active');
+            });
+        });
+    </script>
+</body>
+</html>

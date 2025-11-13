@@ -1,0 +1,733 @@
+/**
+ * Resource DAO (Data Access Object)
+ *
+ * Handles all Resource-related database operations.
+ *
+ * Requirements: 1 (Resource Registration), 3 (Area-based Management), 4 (Resource Search)
+ * Tasks: 5.1 資源CRUD操作, 5.2 資源検索機能
+ */
+
+const crypto = require('crypto');
+const neo4j = require('neo4j-driver');
+const neo4jDriver = require('../db/neo4j-driver');
+
+/**
+ * Create a new resource
+ *
+ * @param {Object} resourceData - Resource data
+ * @param {string} resourceData.name - Resource name
+ * @param {string} resourceData.type - Resource type (place, person, activity, information)
+ * @param {string} [resourceData.description] - Resource description
+ * @param {string} [resourceData.address] - Resource address
+ * @param {string} [resourceData.contact] - Contact information
+ * @param {string} [resourceData.hours] - Operating hours
+ * @param {string} userId - User ID who registers this resource
+ * @param {string} areaId - Area ID where this resource is located
+ * @returns {Promise<Object>} Created resource object
+ */
+async function create(resourceData, userId, areaId) {
+  const session = neo4jDriver.getSession();
+
+  try {
+    // Generate unique resource ID
+    const resourceId = `resource_${crypto.randomUUID()}`;
+
+    // Create Resource node with relationships
+    const result = await session.run(
+      `
+      MATCH (u:User {id: $userId})
+      MATCH (a:Area {id: $areaId})
+      CREATE (r:Resource {
+        id: $id,
+        name: $name,
+        type: $type,
+        description: $description,
+        address: $address,
+        contact: $contact,
+        hours: $hours,
+        view_count: 0,
+        feedback_count: 0,
+        created_at: datetime(),
+        updated_at: datetime()
+      })
+      CREATE (r)-[:REGISTERED_BY]->(u)
+      CREATE (r)-[:LOCATED_IN]->(a)
+      RETURN r
+      `,
+      {
+        id: resourceId,
+        name: resourceData.name,
+        type: resourceData.type,
+        description: resourceData.description || null,
+        address: resourceData.address || null,
+        contact: resourceData.contact || null,
+        hours: resourceData.hours || null,
+        userId,
+        areaId
+      }
+    );
+
+    const resourceNode = result.records[0].get('r').properties;
+
+    return {
+      id: resourceNode.id,
+      name: resourceNode.name,
+      type: resourceNode.type,
+      description: resourceNode.description,
+      address: resourceNode.address,
+      contact: resourceNode.contact,
+      hours: resourceNode.hours,
+      view_count: typeof resourceNode.view_count === 'object'
+        ? resourceNode.view_count.toNumber()
+        : resourceNode.view_count || 0,
+      feedback_count: typeof resourceNode.feedback_count === 'object'
+        ? resourceNode.feedback_count.toNumber()
+        : resourceNode.feedback_count || 0,
+      created_at: resourceNode.created_at.toString(),
+      updated_at: resourceNode.updated_at.toString()
+    };
+  } finally {
+    await session.close();
+  }
+}
+
+/**
+ * Find resource by ID with related information
+ *
+ * @param {string} resourceId - Resource ID
+ * @returns {Promise<Object|null>} Resource object with area and user info, or null if not found
+ */
+async function findById(resourceId) {
+  const session = neo4jDriver.getSession();
+
+  try {
+    const result = await session.run(
+      `
+      MATCH (r:Resource {id: $resourceId})
+      OPTIONAL MATCH (r)-[:LOCATED_IN]->(a:Area)
+      OPTIONAL MATCH (r)-[:REGISTERED_BY]->(u:User)
+      RETURN r, a, u
+      `,
+      { resourceId }
+    );
+
+    if (result.records.length === 0) {
+      return null;
+    }
+
+    const record = result.records[0];
+    const resourceNode = record.get('r').properties;
+    const areaNode = record.get('a') ? record.get('a').properties : null;
+    const userNode = record.get('u') ? record.get('u').properties : null;
+
+    return {
+      id: resourceNode.id,
+      name: resourceNode.name,
+      type: resourceNode.type,
+      description: resourceNode.description,
+      address: resourceNode.address,
+      contact: resourceNode.contact,
+      hours: resourceNode.hours,
+      view_count: typeof resourceNode.view_count === 'object'
+        ? resourceNode.view_count.toNumber()
+        : resourceNode.view_count || 0,
+      feedback_count: typeof resourceNode.feedback_count === 'object'
+        ? resourceNode.feedback_count.toNumber()
+        : resourceNode.feedback_count || 0,
+      created_at: resourceNode.created_at.toString(),
+      updated_at: resourceNode.updated_at.toString(),
+      area: areaNode ? {
+        id: areaNode.id,
+        name: areaNode.name,
+        city: areaNode.city
+      } : null,
+      registered_by: userNode ? {
+        id: userNode.id,
+        name: userNode.name,
+        role: userNode.role
+      } : null
+    };
+  } finally {
+    await session.close();
+  }
+}
+
+/**
+ * Increment view count for a resource
+ *
+ * @param {string} resourceId - Resource ID
+ * @returns {Promise<void>}
+ */
+async function incrementViewCount(resourceId) {
+  const session = neo4jDriver.getSession();
+
+  try {
+    await session.run(
+      `
+      MATCH (r:Resource {id: $resourceId})
+      SET r.view_count = r.view_count + 1
+      `,
+      { resourceId }
+    );
+  } finally {
+    await session.close();
+  }
+}
+
+/**
+ * Increment feedback count for a resource
+ *
+ * @param {string} resourceId - Resource ID
+ * @returns {Promise<void>}
+ */
+async function incrementFeedbackCount(resourceId) {
+  const session = neo4jDriver.getSession();
+
+  try {
+    await session.run(
+      `
+      MATCH (r:Resource {id: $resourceId})
+      SET r.feedback_count = r.feedback_count + 1
+      `,
+      { resourceId }
+    );
+  } finally {
+    await session.close();
+  }
+}
+
+/**
+ * Search resources with filters, sorting, and pagination
+ *
+ * @param {Object} options - Search options
+ * @param {string} [options.keyword] - Keyword to search in name, description, address
+ * @param {string} [options.areaId] - Area ID to filter by
+ * @param {string[]} [options.tags] - Tag IDs to filter by (AND condition)
+ * @param {string} [options.sortBy] - Sort field: feedback_count, created_at, view_count (default: created_at)
+ * @param {number} [options.skip] - Number of records to skip (default: 0)
+ * @param {number} [options.limit] - Number of records to return (default: 20)
+ * @returns {Promise<Object>} Search results with resources, total count, and suggestions
+ */
+async function search(options = {}) {
+  const session = neo4jDriver.getSession();
+
+  try {
+    const {
+      keyword,
+      areaId,
+      areaIds, // Support multiple area IDs
+      tags = [],
+      sortBy = 'created_at',
+      skip = 0,
+      limit = 20
+    } = options;
+
+    // Build WHERE clauses
+    const whereClauses = [];
+    const params = {
+      skip: neo4j.int(skip),
+      limit: neo4j.int(limit)
+    };
+
+    // Keyword search (name, description, address) - case insensitive
+    // Add null safety checks to prevent unexpected matches with null values
+    if (keyword) {
+      whereClauses.push(`(
+        toLower(r.name) CONTAINS toLower($keyword) OR
+        (r.description IS NOT NULL AND toLower(r.description) CONTAINS toLower($keyword)) OR
+        (r.address IS NOT NULL AND toLower(r.address) CONTAINS toLower($keyword))
+      )`);
+      params.keyword = keyword;
+    }
+
+    // Area filter (support both single and multiple area IDs)
+    if (areaIds && Array.isArray(areaIds) && areaIds.length > 0) {
+      whereClauses.push('a.id IN $areaIds');
+      params.areaIds = areaIds;
+    } else if (areaId) {
+      whereClauses.push('a.id = $areaId');
+      params.areaId = areaId;
+    }
+
+    // Tag filter (AND condition - resource must have ALL specified tags)
+    let tagMatchClause = '';
+    if (tags.length > 0) {
+      tagMatchClause = tags.map((tagId, index) => {
+        params[`tagId${index}`] = tagId;
+        return `MATCH (r)-[:HAS_TAG]->(t${index}:Tag {id: $tagId${index}})`;
+      }).join('\n      ');
+    }
+
+    const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    // Sort order
+    const sortField = {
+      'feedback_count': 'r.feedback_count',
+      'created_at': 'r.created_at',
+      'view_count': 'r.view_count'
+    }[sortBy] || 'r.created_at';
+
+    // Main search query
+    const searchQuery = `
+      MATCH (r:Resource)-[:LOCATED_IN]->(a:Area)
+      ${tagMatchClause}
+      ${whereClause}
+      WITH r, a
+      ORDER BY ${sortField} DESC
+      SKIP $skip
+      LIMIT $limit
+      OPTIONAL MATCH (r)-[:HAS_TAG]->(tag:Tag)
+      RETURN r, a, collect(DISTINCT tag) as tags
+    `;
+
+    const searchResult = await session.run(searchQuery, params);
+
+    // Count total results
+    const countQuery = `
+      MATCH (r:Resource)-[:LOCATED_IN]->(a:Area)
+      ${tagMatchClause}
+      ${whereClause}
+      RETURN count(r) as total
+    `;
+
+    const countResult = await session.run(countQuery, params);
+    const total = countResult.records[0].get('total').toNumber();
+
+    // Format results
+    const resources = searchResult.records.map(record => {
+      const resourceNode = record.get('r').properties;
+      const areaNode = record.get('a') ? record.get('a').properties : null;
+      const tagNodes = record.get('tags');
+
+      return {
+        id: resourceNode.id,
+        name: resourceNode.name,
+        type: resourceNode.type,
+        description: resourceNode.description,
+        address: resourceNode.address,
+        contact: resourceNode.contact,
+        hours: resourceNode.hours,
+        view_count: typeof resourceNode.view_count === 'object'
+          ? resourceNode.view_count.toNumber()
+          : resourceNode.view_count,
+        feedback_count: typeof resourceNode.feedback_count === 'object'
+          ? resourceNode.feedback_count.toNumber()
+          : resourceNode.feedback_count,
+        created_at: resourceNode.created_at.toString(),
+        updated_at: resourceNode.updated_at.toString(),
+        area: areaNode ? {
+          id: areaNode.id,
+          name: areaNode.name,
+          city: areaNode.city
+        } : null,
+        tags: tagNodes.map(tagNode => ({
+          id: tagNode.properties.id,
+          name: tagNode.properties.name,
+          category: tagNode.properties.category
+        }))
+      };
+    });
+
+    // Generate suggestions if no results found
+    let suggestions = null;
+    if (resources.length === 0) {
+      suggestions = await generateSuggestions(session, { keyword, areaId, areaIds, tags });
+    }
+
+    // Calculate pagination info
+    const page = Math.floor(skip / limit) + 1;
+
+    return {
+      resources,
+      total,
+      page,
+      limit,
+      suggestions
+    };
+  } finally {
+    await session.close();
+  }
+}
+
+/**
+ * Generate suggestions when search returns no results
+ *
+ * @param {Object} session - Neo4j session
+ * @param {Object} filters - Original search filters
+ * @returns {Promise<Object>} Suggestions object with relatedTags and nearbyAreas
+ */
+async function generateSuggestions(session, filters) {
+  const suggestions = {
+    relatedTags: [],
+    nearbyAreas: []
+  };
+
+  // Suggest related tags (most used tags that appear with any of the searched tags)
+  if (filters.tags && filters.tags.length > 0) {
+    const params = { tags: filters.tags };
+    let relatedTagsQuery;
+
+    // If area filtering is needed, use a different query structure
+    if ((filters.areaIds && Array.isArray(filters.areaIds) && filters.areaIds.length > 0) || filters.areaId) {
+      if (filters.areaIds && Array.isArray(filters.areaIds) && filters.areaIds.length > 0) {
+        params.areaIds = filters.areaIds;
+        relatedTagsQuery = `
+          MATCH (r:Resource)-[:LOCATED_IN]->(a:Area)
+          WHERE a.id IN $areaIds
+          MATCH (r)-[:HAS_TAG]->(t:Tag)
+          WHERE t.id IN $tags
+          WITH DISTINCT r
+          MATCH (r)-[:HAS_TAG]->(relatedTag:Tag)
+          WHERE NOT relatedTag.id IN $tags
+          WITH relatedTag, count(DISTINCT r) as co_occurrence_count
+          RETURN relatedTag.id as id, relatedTag.name as name, relatedTag.category as category, relatedTag.usage_count as usage_count, co_occurrence_count
+          ORDER BY co_occurrence_count DESC, usage_count DESC
+          LIMIT 5
+        `;
+      } else {
+        params.areaId = filters.areaId;
+        relatedTagsQuery = `
+          MATCH (r:Resource)-[:LOCATED_IN]->(a:Area)
+          WHERE a.id = $areaId
+          MATCH (r)-[:HAS_TAG]->(t:Tag)
+          WHERE t.id IN $tags
+          WITH DISTINCT r
+          MATCH (r)-[:HAS_TAG]->(relatedTag:Tag)
+          WHERE NOT relatedTag.id IN $tags
+          WITH relatedTag, count(DISTINCT r) as co_occurrence_count
+          RETURN relatedTag.id as id, relatedTag.name as name, relatedTag.category as category, relatedTag.usage_count as usage_count, co_occurrence_count
+          ORDER BY co_occurrence_count DESC, usage_count DESC
+          LIMIT 5
+        `;
+      }
+    } else {
+      // Original query without area filtering
+      relatedTagsQuery = `
+        MATCH (t:Tag)
+        WHERE t.id IN $tags
+        OPTIONAL MATCH (r:Resource)-[:HAS_TAG]->(t)
+        OPTIONAL MATCH (r)-[:HAS_TAG]->(relatedTag:Tag)
+        WHERE NOT relatedTag.id IN $tags
+        WITH DISTINCT relatedTag
+        WHERE relatedTag IS NOT NULL
+        RETURN relatedTag.id as id, relatedTag.name as name, relatedTag.category as category, relatedTag.usage_count as usage_count
+        ORDER BY usage_count DESC
+        LIMIT 5
+      `;
+    }
+
+    const relatedTagsResult = await session.run(relatedTagsQuery, params);
+    suggestions.relatedTags = relatedTagsResult.records.map(record => ({
+      id: record.get('id'),
+      name: record.get('name'),
+      category: record.get('category'),
+      usage_count: typeof record.get('usage_count') === 'object'
+        ? record.get('usage_count').toNumber()
+        : record.get('usage_count')
+    }));
+  }
+
+  // Suggest nearby areas (areas in same city)
+  if (filters.areaId) {
+    const nearbyAreasQuery = `
+      MATCH (a:Area {id: $areaId})
+      MATCH (nearbyArea:Area {city: a.city})
+      WHERE nearbyArea.id <> $areaId
+      MATCH (r:Resource)-[:LOCATED_IN]->(nearbyArea)
+      RETURN DISTINCT nearbyArea.id as id, nearbyArea.name as name, nearbyArea.city as city, count(r) as resource_count
+      ORDER BY resource_count DESC
+      LIMIT 5
+    `;
+
+    const nearbyAreasResult = await session.run(nearbyAreasQuery, { areaId: filters.areaId });
+    suggestions.nearbyAreas = nearbyAreasResult.records.map(record => ({
+      id: record.get('id'),
+      name: record.get('name'),
+      city: record.get('city'),
+      resource_count: record.get('resource_count').toNumber()
+    }));
+  }
+
+  return suggestions;
+}
+
+/**
+ * Add tags to a resource
+ *
+ * @param {string} resourceId - Resource ID
+ * @param {Array<Object>} tags - Array of tag objects with name and optional category
+ * @param {string} tags[].name - Tag name
+ * @param {string} [tags[].category] - Tag category (optional)
+ * @returns {Promise<void>}
+ */
+async function addTags(resourceId, tags) {
+  const session = neo4jDriver.getSession();
+
+  try {
+    // Process each tag
+    for (const tag of tags) {
+      // Use MERGE to create or reuse Tag node, then create HAS_TAG relationship
+      // MERGE ensures we don't create duplicate tags
+      const query = tag.category
+        ? `
+          MATCH (r:Resource {id: $resourceId})
+          MERGE (t:Tag {name: $tagName})
+          ON CREATE SET
+            t.id = $tagId,
+            t.category = $category,
+            t.usage_count = 0,
+            t.created_at = datetime()
+          MERGE (r)-[:HAS_TAG]->(t)
+          SET t.usage_count = t.usage_count + 1
+          `
+        : `
+          MATCH (r:Resource {id: $resourceId})
+          MERGE (t:Tag {name: $tagName})
+          ON CREATE SET
+            t.id = $tagId,
+            t.usage_count = 0,
+            t.created_at = datetime()
+          MERGE (r)-[:HAS_TAG]->(t)
+          SET t.usage_count = t.usage_count + 1
+          `;
+
+      const params = {
+        resourceId,
+        tagName: tag.name,
+        tagId: `tag_${crypto.randomUUID()}`
+      };
+
+      if (tag.category) {
+        params.category = tag.category;
+      }
+
+      await session.run(query, params);
+    }
+  } finally {
+    await session.close();
+  }
+}
+
+/**
+ * Get tag suggestions sorted by usage count
+ *
+ * @param {number} [limit=10] - Maximum number of tags to return
+ * @returns {Promise<Array<Object>>} Array of tag objects sorted by usage_count descending
+ */
+async function suggestTags(limit = 10) {
+  const session = neo4jDriver.getSession();
+
+  try {
+    const result = await session.run(
+      `
+      MATCH (t:Tag)
+      RETURN t.id as id, t.name as name, t.category as category, t.usage_count as usage_count
+      ORDER BY usage_count DESC
+      LIMIT $limit
+      `,
+      { limit: neo4j.int(limit) }
+    );
+
+    return result.records.map(record => ({
+      id: record.get('id'),
+      name: record.get('name'),
+      category: record.get('category'),
+      usage_count: typeof record.get('usage_count') === 'object'
+        ? record.get('usage_count').toNumber()
+        : record.get('usage_count')
+    }));
+  } finally {
+    await session.close();
+  }
+}
+
+/**
+ * Create a relationship between two resources
+ *
+ * @param {string} fromResourceId - Source resource ID
+ * @param {string} toResourceId - Target resource ID
+ * @param {Object} relationshipData - Relationship properties
+ * @param {string} relationshipData.relation_type - Type of relationship (nearby, similar, sequential)
+ * @param {string} [relationshipData.distance] - Distance between resources (optional)
+ * @param {string} [relationshipData.description] - Description of the relationship (optional)
+ * @param {string} relationshipData.created_by - User ID who created the relationship
+ * @returns {Promise<void>}
+ */
+async function createRelationship(fromResourceId, toResourceId, relationshipData) {
+  const session = neo4jDriver.getSession();
+
+  try {
+    const { relation_type, distance, description, created_by } = relationshipData;
+
+    await session.run(
+      `
+      MATCH (from:Resource {id: $fromId})
+      MATCH (to:Resource {id: $toId})
+      CREATE (from)-[rel:RELATED_TO {
+        relation_type: $relation_type,
+        distance: $distance,
+        description: $description,
+        created_by: $created_by,
+        created_at: datetime()
+      }]->(to)
+      RETURN rel
+      `,
+      {
+        fromId: fromResourceId,
+        toId: toResourceId,
+        relation_type,
+        distance: distance || null,
+        description: description || null,
+        created_by
+      }
+    );
+  } finally {
+    await session.close();
+  }
+}
+
+/**
+ * Find directly connected resources
+ *
+ * @param {string} resourceId - Resource ID
+ * @returns {Promise<Array<Object>>} Array of connected resources with relationship info
+ */
+async function findConnectedResources(resourceId) {
+  const session = neo4jDriver.getSession();
+
+  try {
+    const result = await session.run(
+      `
+      MATCH (r:Resource {id: $resourceId})-[rel:RELATED_TO]->(connected:Resource)
+      RETURN connected, rel
+      `,
+      { resourceId }
+    );
+
+    return result.records.map(record => {
+      const connectedNode = record.get('connected').properties;
+      const relationship = record.get('rel').properties;
+
+      return {
+        id: connectedNode.id,
+        name: connectedNode.name,
+        type: connectedNode.type,
+        description: connectedNode.description,
+        address: connectedNode.address,
+        relationship: {
+          relation_type: relationship.relation_type,
+          distance: relationship.distance,
+          description: relationship.description,
+          created_by: relationship.created_by,
+          created_at: relationship.created_at.toString()
+        }
+      };
+    });
+  } finally {
+    await session.close();
+  }
+}
+
+/**
+ * Fetch ego network (multi-hop connections) for a resource
+ *
+ * @param {string} resourceId - Center resource ID
+ * @param {number} [depth=2] - Maximum depth to traverse (1-3)
+ * @returns {Promise<Object>} Network object with nodes and edges
+ */
+async function fetchEgoNetwork(resourceId, depth = 2) {
+  const session = neo4jDriver.getSession();
+
+  try {
+    // Limit depth to 1-3 for performance
+    const maxDepth = Math.min(Math.max(depth, 1), 3);
+
+    const result = await session.run(
+      `
+      MATCH path = (center:Resource {id: $resourceId})-[:RELATED_TO*1..${maxDepth}]->(connected:Resource)
+      UNWIND nodes(path) as n
+      UNWIND relationships(path) as r
+      WITH DISTINCT n, r, startNode(r) as source, endNode(r) as target
+      RETURN
+        collect(DISTINCT {id: n.id, name: n.name, type: n.type, description: n.description}) as nodes,
+        collect(DISTINCT {
+          source: source.id,
+          target: target.id,
+          relation_type: r.relation_type,
+          distance: r.distance,
+          description: r.description
+        }) as edges
+      `,
+      { resourceId }
+    );
+
+    if (result.records.length === 0) {
+      // If no connections, just return the center node
+      const centerResult = await session.run(
+        'MATCH (r:Resource {id: $resourceId}) RETURN r',
+        { resourceId }
+      );
+
+      if (centerResult.records.length > 0) {
+        const centerNode = centerResult.records[0].get('r').properties;
+        return {
+          nodes: [{
+            id: centerNode.id,
+            name: centerNode.name,
+            type: centerNode.type,
+            description: centerNode.description
+          }],
+          edges: []
+        };
+      }
+
+      return { nodes: [], edges: [] };
+    }
+
+    // Collect all unique nodes and edges
+    const nodesMap = new Map();
+    const edgesSet = new Set();
+    const edgesList = [];
+
+    result.records.forEach(record => {
+      const nodes = record.get('nodes');
+      const edges = record.get('edges');
+
+      // Add nodes
+      nodes.forEach(node => {
+        if (!nodesMap.has(node.id)) {
+          nodesMap.set(node.id, node);
+        }
+      });
+
+      // Add edges
+      edges.forEach(edge => {
+        const edgeKey = `${edge.source}-${edge.target}-${edge.relation_type}`;
+        if (!edgesSet.has(edgeKey)) {
+          edgesSet.add(edgeKey);
+          edgesList.push(edge);
+        }
+      });
+    });
+
+    return {
+      nodes: Array.from(nodesMap.values()),
+      edges: edgesList
+    };
+  } finally {
+    await session.close();
+  }
+}
+
+module.exports = {
+  create,
+  findById,
+  incrementViewCount,
+  incrementFeedbackCount,
+  search,
+  addTags,
+  suggestTags,
+  createRelationship,
+  findConnectedResources,
+  fetchEgoNetwork
+};

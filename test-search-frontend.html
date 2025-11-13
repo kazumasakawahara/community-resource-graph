@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>検索機能テスト</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        .result { margin: 20px 0; padding: 15px; background: #f5f5f5; border-radius: 4px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>検索機能テスト</h1>
+
+    <div>
+        <button onclick="testInitialLoad()">1. 初回ロードテスト (全50件)</button>
+        <button onclick="testKeywordSearch()">2. キーワード検索テスト (静かな場所)</button>
+        <button onclick="testClearSearch()">3. クリア後の全件表示</button>
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+        const API_URL = 'http://localhost:3000/api/resources/search';
+
+        function showResult(title, data, isSuccess) {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `result ${isSuccess ? 'success' : 'error'}`;
+            div.innerHTML = `
+                <h3>${title}</h3>
+                <pre>${JSON.stringify(data, null, 2)}</pre>
+            `;
+            results.appendChild(div);
+        }
+
+        async function testInitialLoad() {
+            try {
+                const response = await fetch(`${API_URL}?sortBy=created_at&limit=50`);
+                const data = await response.json();
+                const resourceCount = data.data.resources.length;
+                const isSuccess = resourceCount === 50;
+
+                showResult(
+                    `1. 初回ロード: ${resourceCount}件 ${isSuccess ? '✅' : '❌'}`,
+                    {
+                        resourceCount,
+                        expected: 50,
+                        match: isSuccess,
+                        pagination: data.data.pagination
+                    },
+                    isSuccess
+                );
+            } catch (error) {
+                showResult('1. 初回ロード: エラー ❌', { error: error.message }, false);
+            }
+        }
+
+        async function testKeywordSearch() {
+            try {
+                const response = await fetch(`${API_URL}?keyword=${encodeURIComponent('静かな場所')}&sortBy=created_at&limit=50`);
+                const data = await response.json();
+                const resourceCount = data.data.resources.length;
+                const isSuccess = resourceCount < 50 && resourceCount > 0;
+
+                showResult(
+                    `2. キーワード検索: ${resourceCount}件 ${isSuccess ? '✅' : '❌'}`,
+                    {
+                        keyword: '静かな場所',
+                        resourceCount,
+                        expectedRange: '1-49件',
+                        match: isSuccess,
+                        pagination: data.data.pagination,
+                        firstResource: data.data.resources[0]?.name
+                    },
+                    isSuccess
+                );
+            } catch (error) {
+                showResult('2. キーワード検索: エラー ❌', { error: error.message }, false);
+            }
+        }
+
+        async function testClearSearch() {
+            try {
+                const response = await fetch(`${API_URL}?sortBy=created_at&limit=50`);
+                const data = await response.json();
+                const resourceCount = data.data.resources.length;
+                const isSuccess = resourceCount === 50;
+
+                showResult(
+                    `3. クリア後: ${resourceCount}件 ${isSuccess ? '✅' : '❌'}`,
+                    {
+                        resourceCount,
+                        expected: 50,
+                        match: isSuccess
+                    },
+                    isSuccess
+                );
+            } catch (error) {
+                showResult('3. クリア後: エラー ❌', { error: error.message }, false);
+            }
+        }
+
+        // ページロード時に自動的に全テストを実行
+        window.addEventListener('load', async () => {
+            await testInitialLoad();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await testKeywordSearch();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await testClearSearch();
+        });
+    </script>
+</body>
+</html>
