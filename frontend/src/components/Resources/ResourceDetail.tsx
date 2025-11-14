@@ -11,6 +11,7 @@ import type { Resource } from '../../api/resources';
 import { feedbackAPI } from '../../api/feedback';
 import type { Feedback } from '../../api/feedback';
 import { useAuth } from '../../contexts/AuthContext';
+import { FeedbackForm } from './FeedbackForm';
 
 export const ResourceDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -24,8 +25,6 @@ export const ResourceDetail: React.FC = () => {
 
   // Feedback form state
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
-  const [feedbackContent, setFeedbackContent] = useState('');
-  const [visitDate, setVisitDate] = useState('');
 
   useEffect(() => {
     if (id) {
@@ -58,27 +57,18 @@ export const ResourceDetail: React.FC = () => {
     }
   };
 
-  const handleSubmitFeedback = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleFeedbackSuccess = async () => {
     if (!id) return;
 
     try {
-      await feedbackAPI.create(id, {
-        content: feedbackContent,
-        visit_date: visitDate
-      });
-
-      // Reload feedbacks
+      // Reload feedbacks and resource data
       const feedbackRes = await feedbackAPI.getByResource(id);
       setFeedbacks(feedbackRes.data.feedbacks);
 
-      // Reset form
-      setFeedbackContent('');
-      setVisitDate('');
+      // Hide form
       setShowFeedbackForm(false);
     } catch (err: any) {
-      alert('フィードバックの投稿に失敗しました');
-      console.error(err);
+      console.error('Failed to reload feedbacks:', err);
     }
   };
 
@@ -351,67 +341,12 @@ export const ResourceDetail: React.FC = () => {
         </div>
 
         {/* Feedback Form */}
-        {showFeedbackForm && (
-          <div style={{ marginBottom: '30px', padding: '20px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
-            <h3>フィードバックを投稿</h3>
-            <form onSubmit={handleSubmitFeedback}>
-              <div style={{ marginBottom: '15px' }}>
-                <label style={{ display: 'block', marginBottom: '5px' }}>訪問日</label>
-                <input
-                  type="date"
-                  value={visitDate}
-                  onChange={(e) => setVisitDate(e.target.value)}
-                  required
-                  style={{ width: '100%', padding: '8px', fontSize: '14px' }}
-                />
-              </div>
-
-              <div style={{ marginBottom: '15px' }}>
-                <label style={{ display: 'block', marginBottom: '5px' }}>内容</label>
-                <textarea
-                  value={feedbackContent}
-                  onChange={(e) => setFeedbackContent(e.target.value)}
-                  required
-                  rows={4}
-                  style={{ width: '100%', padding: '8px', fontSize: '14px' }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button
-                  type="submit"
-                  style={{
-                    padding: '8px 16px',
-                    backgroundColor: '#28a745',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  投稿
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowFeedbackForm(false);
-                    setFeedbackContent('');
-                    setVisitDate('');
-                  }}
-                  style={{
-                    padding: '8px 16px',
-                    backgroundColor: '#6c757d',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  キャンセル
-                </button>
-              </div>
-            </form>
-          </div>
+        {showFeedbackForm && id && (
+          <FeedbackForm
+            resourceId={id}
+            onSuccess={handleFeedbackSuccess}
+            onCancel={() => setShowFeedbackForm(false)}
+          />
         )}
 
         {/* Feedback List */}

@@ -14,6 +14,7 @@ import { RegisterForm } from './components/Auth/RegisterForm';
 import { Dashboard } from './components/Dashboard/Dashboard';
 import { ResourceList } from './components/Resources/ResourceList';
 import { ResourceDetail } from './components/Resources/ResourceDetail';
+import { ResourceForm } from './components/Resources/ResourceForm';
 import { NetworkGraph } from './components/Network/NetworkGraph';
 import { NeedsList } from './components/Needs/NeedsList';
 import { NeedsDetail } from './components/Needs/NeedsDetail';
@@ -137,10 +138,30 @@ function App() {
             }
           />
           <Route
+            path="/resources/new"
+            element={
+              <Layout>
+                <ProtectedRoute>
+                  <ResourceForm mode="create" />
+                </ProtectedRoute>
+              </Layout>
+            }
+          />
+          <Route
             path="/resources/:id"
             element={
               <Layout>
                 <ResourceDetail />
+              </Layout>
+            }
+          />
+          <Route
+            path="/resources/:id/edit"
+            element={
+              <Layout>
+                <ProtectedRoute>
+                  <ResourceForm mode="edit" />
+                </ProtectedRoute>
               </Layout>
             }
           />

@@ -72,7 +72,9 @@ async function getNeeds(req, res, next) {
     res.status(200).json({
       success: true,
       data: {
-        needs
+        needs,
+        page: filters.page,
+        limit: filters.limit
       }
     });
   } catch (error) {

@@ -71,8 +71,7 @@ async function createFeedback(resourceId, feedbackData, userId) {
  * Get feedbacks for a resource
  *
  * @param {string} resourceId - Resource ID
- * @returns {Promise<Array>} Array of feedbacks with author information
- * @throws {NotFoundError} If resource not found
+ * @returns {Promise<Array>} Array of feedbacks with author information (empty array if no feedbacks)
  * @throws {ValidationError} If resourceId is missing
  */
 async function getFeedbacksByResource(resourceId) {
@@ -80,13 +79,7 @@ async function getFeedbacksByResource(resourceId) {
     throw new ValidationError('Resource ID is required');
   }
 
-  // Verify resource exists
-  const resource = await resourceDAO.findById(resourceId);
-  if (!resource) {
-    throw new NotFoundError('Resource not found');
-  }
-
-  // Get feedbacks
+  // Get feedbacks (returns empty array if resource doesn't exist or has no feedbacks)
   const feedbacks = await feedbackDAO.findByResourceId(resourceId);
 
   return feedbacks;
@@ -96,7 +89,7 @@ async function getFeedbacksByResource(resourceId) {
  * Increment helpful count for a feedback
  *
  * @param {string} feedbackId - Feedback ID
- * @returns {Promise<void>}
+ * @returns {Promise<Object>} Updated feedback object
  * @throws {NotFoundError} If feedback not found
  * @throws {ValidationError} If feedbackId is missing
  */
@@ -105,8 +98,14 @@ async function incrementHelpfulCount(feedbackId) {
     throw new ValidationError('Feedback ID is required');
   }
 
-  // Increment helpful count (throws error if not found)
-  await feedbackDAO.incrementHelpfulCount(feedbackId);
+  // Increment helpful count
+  const feedback = await feedbackDAO.incrementHelpfulCount(feedbackId);
+
+  if (!feedback) {
+    throw new NotFoundError('Feedback not found');
+  }
+
+  return feedback;
 }
 
 module.exports = {

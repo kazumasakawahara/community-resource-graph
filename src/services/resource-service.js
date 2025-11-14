@@ -8,6 +8,7 @@
  */
 
 const resourceDAO = require('../dao/resource-dao');
+const areaDAO = require('../dao/area-dao');
 const { generateEmbedding } = require('./embedding-service');
 const { expandQuery } = require('./query-expansion-service');
 const neo4jDriver = require('../db/neo4j-driver');
@@ -62,6 +63,17 @@ async function createResource(resourceData, userId) {
     throw new ValidationError('User ID is required');
   }
 
+  // Handle area: find or create if it's a new area name
+  let areaId = resourceData.areaId;
+
+  // If areaId doesn't start with 'area_', it's a new area name
+  if (!areaId.startsWith('area_')) {
+    console.log(`📍 Creating new area: ${areaId}`);
+    const area = await areaDAO.findOrCreateArea(areaId);
+    areaId = area.id;
+    console.log(`✅ Area created/found with ID: ${areaId}`);
+  }
+
   // Create resource
   const resource = await resourceDAO.create(
     {
@@ -73,7 +85,7 @@ async function createResource(resourceData, userId) {
       hours: resourceData.hours
     },
     userId,
-    resourceData.areaId
+    areaId
   );
 
   // Add tags if provided

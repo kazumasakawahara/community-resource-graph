@@ -221,6 +221,27 @@ async function updateStatus(needId, newStatus) {
 }
 
 /**
+ * Increment view count for a need
+ * @param {string} needId - Need ID
+ * @returns {Promise<void>}
+ */
+async function incrementViewCount(needId) {
+  const session = neo4jDriver.getSession();
+
+  try {
+    await session.run(
+      `
+      MATCH (n:Need {id: $needId})
+      SET n.view_count = n.view_count + 1
+      `,
+      { needId }
+    );
+  } finally {
+    await session.close();
+  }
+}
+
+/**
  * Find resources in the same area as the need
  * @param {string} needId - Need ID
  * @returns {Promise<Array>} Array of resource objects in the same area with feedback/view counts
@@ -343,6 +364,7 @@ module.exports = {
   findAll,
   findById,
   updateStatus,
+  incrementViewCount,
   findResourcesByArea,
   createMatch,
   getMatchedResources

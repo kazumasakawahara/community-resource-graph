@@ -25,12 +25,21 @@ describe('Needs Endpoints', () => {
 
   beforeAll(async () => {
     // Create test user
-    const userResponse = await request(app)
+    const registerResponse = await request(app)
       .post('/api/auth/register')
       .send(testUser);
 
-    accessToken = userResponse.body.data.accessToken;
-    userId = userResponse.body.data.user.id;
+    userId = registerResponse.body.data.user.id;
+
+    // Login to get access token
+    const loginResponse = await request(app)
+      .post('/api/auth/login')
+      .send({
+        email: testUser.email,
+        password: testUser.password
+      });
+
+    accessToken = loginResponse.body.data.accessToken;
 
     // Create test area and resource
     const session = neo4jDriver.getSession();

@@ -15,6 +15,10 @@
     "test:integration": "jest tests/integration --runInBand",
     "test:search": "jest tests/dao/resource-search.test.js --runInBand",
     "test:services": "jest tests/services --runInBand",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:report": "playwright show-report",
     "lint": "eslint src/**/*.ts",
     "format": "prettier --write \"src/**/*.ts\"",
     "db:create-indexes": "node scripts/run-create-indexes.js",
@@ -39,6 +43,7 @@
     "neo4j-driver": "^5.14.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.56.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",

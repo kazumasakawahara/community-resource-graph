@@ -14,7 +14,7 @@ const { NotFoundError, ValidationError } = require('../utils/errors');
  * Get ego network for a resource
  * @param {string} resourceId - Resource ID
  * @param {number} depth - Network depth (1-3)
- * @returns {Promise<Object>} - Network with nodes and edges
+ * @returns {Promise<Object>} - Network with nodes and relationships
  */
 async function getEgoNetwork(resourceId, depth = 2) {
   // Validate depth
@@ -25,9 +25,11 @@ async function getEgoNetwork(resourceId, depth = 2) {
   const session = neo4jDriver.getSession();
 
   try {
-    // First, verify the resource exists
+    // First, verify the resource exists and get center node
     const resourceCheck = await session.run(
-      'MATCH (r:Resource {id: $resourceId}) RETURN r',
+      `MATCH (r:Resource {id: $resourceId})
+       OPTIONAL MATCH (r)-[:LOCATED_IN]->(area:Area)
+       RETURN r, area`,
       { resourceId }
     );
 
@@ -35,110 +37,99 @@ async function getEgoNetwork(resourceId, depth = 2) {
       throw new NotFoundError('Resource not found');
     }
 
-    // Get ego network with specified depth
-    const result = await session.run(
+    const centerRecord = resourceCheck.records[0];
+    const centerNode = centerRecord.get('r').properties;
+    const centerArea = centerRecord.get('area');
+
+    // Format center node
+    const formattedCenterNode = {
+      id: centerNode.id,
+      name: centerNode.name,
+      type: centerNode.type,
+      description: centerNode.description,
+      area: centerArea ? centerArea.properties.name : null,
+      feedback_count: centerNode.feedback_count,
+      view_count: centerNode.view_count
+    };
+
+    // Get all nodes in the ego network using variable-length path
+    // Note: Use undirected pattern to traverse in both directions
+    const nodesQuery = `
+      MATCH (center:Resource {id: $resourceId})
+      OPTIONAL MATCH path = (center)-[:RELATED_TO*1..${depth}]-(connected:Resource)
+      WHERE connected.id <> $resourceId OR connected IS NULL
+      WITH DISTINCT connected
+      WHERE connected IS NOT NULL
+      OPTIONAL MATCH (connected)-[:LOCATED_IN]->(area:Area)
+      RETURN connected as resource, area
+    `;
+
+    const nodesResult = await session.run(nodesQuery, { resourceId });
+
+    const allNodes = [formattedCenterNode];
+    const nodeIds = new Set([centerNode.id]);
+
+    nodesResult.records.forEach(record => {
+      const resource = record.get('resource');
+      const area = record.get('area');
+
+      if (resource && resource.properties && !nodeIds.has(resource.properties.id)) {
+        nodeIds.add(resource.properties.id);
+        allNodes.push({
+          id: resource.properties.id,
+          name: resource.properties.name,
+          type: resource.properties.type,
+          description: resource.properties.description,
+          area: area ? area.properties.name : null,
+          feedback_count: resource.properties.feedback_count,
+          view_count: resource.properties.view_count
+        });
+      }
+    });
+
+    // Get all relationships in the ego network
+    const relsResult = await session.run(
       `MATCH (center:Resource {id: $resourceId})
-       OPTIONAL MATCH path = (center)-[rel:RELATED_TO*1..${depth}]-(connected:Resource)
-       WITH center, collect(DISTINCT connected) as connectedResources,
-            collect(DISTINCT rel) as relationships,
-            count(DISTINCT connected) as nodeCount
-
-       // Return warning if too many nodes
-       WITH center, connectedResources, relationships, nodeCount,
-            CASE WHEN nodeCount > 100 THEN true ELSE false END as warning
-
-       // Limit to 100 nodes if exceeded
-       WITH center,
-            CASE WHEN warning THEN connectedResources[0..100] ELSE connectedResources END as limitedResources,
-            relationships[0..100] as limitedRelationships,
-            warning
-
-       UNWIND limitedResources as resource
-       OPTIONAL MATCH (resource)-[:LOCATED_IN]->(area:Area)
-       WITH center, collect(DISTINCT {
-         id: resource.id,
-         name: resource.name,
-         type: resource.type,
-         description: resource.description,
-         area: area.name,
-         feedback_count: resource.feedback_count,
-         view_count: resource.view_count
-       }) as nodes, limitedRelationships, warning
-
-       // Get center node area
-       OPTIONAL MATCH (center)-[:LOCATED_IN]->(centerArea:Area)
-
-       RETURN {
-         id: center.id,
-         name: center.name,
-         type: center.type,
-         description: center.description,
-         area: centerArea.name,
-         feedback_count: center.feedback_count,
-         view_count: center.view_count
-       } as centerNode, nodes, limitedRelationships as relationships, warning`,
+       MATCH path = (center)-[:RELATED_TO*1..${depth}]-(connected:Resource)
+       WITH relationships(path) as rels
+       UNWIND rels as rel
+       MATCH (start:Resource)-[rel]-(end:Resource)
+       RETURN DISTINCT start.id as startId, end.id as endId,
+              rel.relation_type as relation_type,
+              rel.distance as distance,
+              rel.description as description,
+              rel.created_at as created_at`,
       { resourceId }
     );
 
-    if (result.records.length === 0) {
-      // Resource exists but has no connections
-      const centerData = resourceCheck.records[0].get('r').properties;
-      return {
-        center: {
-          id: centerData.id,
-          name: centerData.name,
-          type: centerData.type,
-          description: centerData.description
-        },
-        nodes: [],
-        edges: [],
-        warning: null
-      };
-    }
+    const relationships = [];
+    const seenPairs = new Set();
 
-    const record = result.records[0];
-    const centerNode = record.get('centerNode');
-    const nodes = record.get('nodes');
-    const relationships = record.get('relationships');
-    const warning = record.get('warning');
+    relsResult.records.forEach(record => {
+      const startId = record.get('startId');
+      const endId = record.get('endId');
 
-    // Process edges from relationships
-    const edges = [];
-    const processedPairs = new Set();
+      if (!startId || !endId) return;
 
-    relationships.forEach(relArray => {
-      if (!relArray) return;
+      // Create unique key for undirected relationship
+      const pairKey = `${startId < endId ? startId : endId}-${startId < endId ? endId : startId}`;
 
-      // relArray is an array of relationship objects
-      relArray.forEach(rel => {
-        const startId = rel.start.low || rel.start;
-        const endId = rel.end.low || rel.end;
-        const pairKey = `${Math.min(startId, endId)}-${Math.max(startId, endId)}`;
-
-        // Avoid duplicate edges for undirected relationships
-        if (!processedPairs.has(pairKey)) {
-          processedPairs.add(pairKey);
-
-          edges.push({
-            source: startId,
-            target: endId,
-            relation_type: rel.properties.relation_type || 'related',
-            distance: rel.properties.distance || null,
-            description: rel.properties.description || null,
-            created_at: rel.properties.created_at || null
-          });
-        }
-      });
+      if (!seenPairs.has(pairKey)) {
+        seenPairs.add(pairKey);
+        relationships.push({
+          source: startId,
+          target: endId,
+          relation_type: record.get('relation_type') || 'related',
+          distance: record.get('distance'),
+          description: record.get('description'),
+          created_at: record.get('created_at')
+        });
+      }
     });
 
     return {
-      center: centerNode,
-      nodes: nodes.filter(n => n.id !== centerNode.id), // Exclude center from nodes list
-      edges: edges,
-      depth: depth,
-      warning: warning
-        ? 'Network size exceeded 100 nodes. Results have been limited.'
-        : null
+      nodes: allNodes,
+      relationships: relationships
     };
   } finally {
     await session.close();

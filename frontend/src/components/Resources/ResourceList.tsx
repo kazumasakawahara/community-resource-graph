@@ -5,13 +5,16 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { resourcesAPI } from '../../api/resources';
 import type { Resource, SearchParams } from '../../api/resources';
 import { statsAPI } from '../../api/stats';
 import type { AreaStat, TagStat } from '../../api/stats';
+import { useAuth } from '../../contexts/AuthContext';
 
 export const ResourceList: React.FC = () => {
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const [searchParams] = useSearchParams();
   const [resources, setResources] = useState<Resource[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -184,7 +187,30 @@ export const ResourceList: React.FC = () => {
 
   return (
     <div style={{ padding: '20px' }}>
-      <h1>資源一覧 [更新版 v2.0]</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <h1 style={{ margin: 0 }}>資源一覧 [更新版 v2.0]</h1>
+        {isAuthenticated && (
+          <button
+            onClick={() => navigate('/resources/new')}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#28a745',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              fontSize: '16px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            <span style={{ fontSize: '18px' }}>+</span>
+            新しい資源を登録
+          </button>
+        )}
+      </div>
 
       {/* Search Result Count and Active Filters */}
       {!isLoading && (

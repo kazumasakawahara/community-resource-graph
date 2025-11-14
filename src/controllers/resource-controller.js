@@ -173,16 +173,28 @@ async function createRelationship(req, res, next) {
     const fromId = req.params.id;
     const { toId, relation_type, distance, description } = req.body;
 
+    if (!req.user || !req.user.userId) {
+      throw new Error('User authentication required');
+    }
+
     // Create relationship
     await resourceService.createRelationship(fromId, toId, {
       relation_type,
       distance,
-      description
+      description,
+      created_by: req.user.userId
     });
 
     res.status(201).json({
       success: true,
-      message: 'Relationship created successfully'
+      message: 'Relationship created successfully',
+      data: {
+        relationship: {
+          relation_type,
+          distance,
+          description
+        }
+      }
     });
   } catch (error) {
     next(error);

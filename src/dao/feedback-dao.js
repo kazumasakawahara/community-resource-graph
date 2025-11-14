@@ -76,7 +76,7 @@ async function findByResourceId(resourceId) {
       `
       MATCH (r:Resource {id: $resourceId})-[:HAS_FEEDBACK]->(f:Feedback)
       MATCH (f)-[:GIVEN_BY]->(u:User)
-      RETURN f, u.name as author_name
+      RETURN f, u.id as user_id, u.name as user_name
       ORDER BY f.created_at DESC
       `,
       { resourceId }
@@ -84,7 +84,8 @@ async function findByResourceId(resourceId) {
 
     return result.records.map(record => {
       const feedback = record.get('f').properties;
-      const authorName = record.get('author_name');
+      const userId = record.get('user_id');
+      const userName = record.get('user_name');
 
       return {
         id: feedback.id,
@@ -94,7 +95,11 @@ async function findByResourceId(resourceId) {
           ? feedback.helpful_count.toNumber()
           : feedback.helpful_count,
         created_at: feedback.created_at.toString(),
-        author_name: authorName
+        author_name: userName,
+        user: {
+          id: userId,
+          name: userName
+        }
       };
     });
   } finally {
@@ -105,19 +110,36 @@ async function findByResourceId(resourceId) {
 /**
  * Increment helpful_count for a feedback
  * @param {string} feedbackId - Feedback ID
- * @returns {Promise<void>}
+ * @returns {Promise<Object|null>} Updated feedback object or null if not found
  */
 async function incrementHelpfulCount(feedbackId) {
   const session = neo4jDriver.getSession();
 
   try {
-    await session.run(
+    const result = await session.run(
       `
       MATCH (f:Feedback {id: $feedbackId})
       SET f.helpful_count = f.helpful_count + 1
+      RETURN f
       `,
       { feedbackId }
     );
+
+    if (result.records.length === 0) {
+      return null;
+    }
+
+    const feedback = result.records[0].get('f').properties;
+
+    return {
+      id: feedback.id,
+      content: feedback.content,
+      visit_date: feedback.visit_date,
+      helpful_count: typeof feedback.helpful_count === 'object'
+        ? feedback.helpful_count.toNumber()
+        : feedback.helpful_count,
+      created_at: feedback.created_at.toString()
+    };
   } finally {
     await session.close();
   }

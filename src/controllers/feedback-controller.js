@@ -83,11 +83,13 @@ async function markHelpful(req, res, next) {
   try {
     const feedbackId = req.params.id;
 
-    await feedbackService.incrementHelpfulCount(feedbackId);
+    const feedback = await feedbackService.incrementHelpfulCount(feedbackId);
 
     res.status(200).json({
       success: true,
-      message: 'Helpful count incremented'
+      data: {
+        feedback
+      }
     });
   } catch (error) {
     next(error);

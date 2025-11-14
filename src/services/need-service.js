@@ -110,7 +110,14 @@ async function getNeedById(needId) {
     throw new NotFoundError('Need not found');
   }
 
-  return need;
+  // Increment view count
+  await needDAO.incrementViewCount(needId);
+
+  // Return need with updated view_count
+  return {
+    ...need,
+    view_count: need.view_count + 1
+  };
 }
 
 /**
