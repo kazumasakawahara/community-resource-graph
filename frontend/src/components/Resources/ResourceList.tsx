@@ -68,7 +68,7 @@ export const ResourceList: React.FC = () => {
 
       const params: SearchParams = {
         sortBy: 'created_at',
-        limit: 50
+        limit: 100
       };
 
       // Add URL filters if present
@@ -106,7 +106,7 @@ export const ResourceList: React.FC = () => {
         areaId: selectedArea || undefined,
         tags: selectedTag || undefined,
         sortBy,
-        limit: 50
+        limit: 100
       };
 
       console.log('📡 Sending API request with params:', params);
@@ -250,14 +250,14 @@ export const ResourceList: React.FC = () => {
 
       {/* Search Mode Toggle */}
       <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#e3f2fd', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '15px' }}>
-        <span style={{ fontWeight: 'bold', fontSize: '14px' }}>検索モード:</span>
+        <span style={{ fontWeight: 'bold', fontSize: '14px', color: '#333' }}>検索モード:</span>
         <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
           <input
             type="radio"
             checked={!useSemanticSearch}
             onChange={() => setUseSemanticSearch(false)}
           />
-          <span>通常検索</span>
+          <span style={{ color: '#333' }}>通常検索</span>
         </label>
         <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
           <input
@@ -265,7 +265,7 @@ export const ResourceList: React.FC = () => {
             checked={useSemanticSearch}
             onChange={() => setUseSemanticSearch(true)}
           />
-          <span>🔍 セマンティック検索 (意味検索)</span>
+          <span style={{ color: '#333' }}>🔍 セマンティック検索 (意味検索)</span>
         </label>
       </div>
 
@@ -457,7 +457,7 @@ export const ResourceList: React.FC = () => {
                 e.currentTarget.style.boxShadow = 'none';
               }}
             >
-              <h3 style={{ marginTop: 0, marginBottom: '10px' }}>{highlightText(resource.name, keyword)}</h3>
+              <h3 style={{ marginTop: 0, marginBottom: '10px', color: '#333' }}>{highlightText(resource.name, keyword)}</h3>
               <div style={{ fontSize: '12px', color: '#666', marginBottom: '10px' }}>
                 <span style={{ marginRight: '10px' }}>
                   種類: {resource.type?.name || resource.type || '不明'}

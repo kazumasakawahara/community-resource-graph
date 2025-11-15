@@ -35,3 +35,11 @@ Thumbs.db
 # Temporary files
 *.tmp
 temp/
+
+# Scripts
+organize_project.sh
+
+# Claude/AI tools
+.claude/
+.serena/
+.kiro/

@@ -161,6 +161,8 @@ export const ResourceForm: React.FC<ResourceFormProps> = ({
     setError('');
 
     if (!validateForm()) {
+      // Scroll to top to show validation errors
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
@@ -201,6 +203,8 @@ export const ResourceForm: React.FC<ResourceFormProps> = ({
         err.response?.data?.error?.message ||
         '資源の登録に失敗しました。もう一度お試しください。'
       );
+      // Scroll to top to show error message
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setIsLoading(false);
     }

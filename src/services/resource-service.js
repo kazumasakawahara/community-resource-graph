@@ -74,6 +74,26 @@ async function createResource(resourceData, userId) {
     console.log(`✅ Area created/found with ID: ${areaId}`);
   }
 
+  // Check for duplicates (same name + address)
+  if (resourceData.address) {
+    const session = neo4jDriver.getSession();
+    try {
+      const duplicateCheck = await session.run(
+        `MATCH (r:Resource {name: $name})
+         WHERE r.address = $address
+         RETURN r
+         LIMIT 1`,
+        { name: resourceData.name, address: resourceData.address }
+      );
+      
+      if (duplicateCheck.records.length > 0) {
+        throw new ValidationError('この資源は既に登録されています（同じ名前と住所）');
+      }
+    } finally {
+      await session.close();
+    }
+  }
+
   // Create resource
   const resource = await resourceDAO.create(
     {
@@ -87,6 +107,30 @@ async function createResource(resourceData, userId) {
     userId,
     areaId
   );
+
+  // Generate and save embedding for semantic search
+  try {
+    const textForEmbedding = `${resourceData.name}. ${resourceData.description || ''}`;
+    console.log('🧠 Generating embedding for new resource...');
+    const embedding = await generateEmbedding(textForEmbedding);
+    console.log(`✅ Embedding generated, dimensions: ${embedding.length}`);
+    
+    // Save embedding to Neo4j
+    const session = neo4jDriver.getSession();
+    try {
+      await session.run(
+        `MATCH (r:Resource {id: $resourceId})
+         SET r.embedding = $embedding`,
+        { resourceId: resource.id, embedding: embedding }
+      );
+      console.log('✅ Embedding saved to database');
+    } finally {
+      await session.close();
+    }
+  } catch (error) {
+    console.error('⚠️  Failed to generate/save embedding:', error.message);
+    // Don't fail the entire operation if embedding generation fails
+  }
 
   // Add tags if provided
   if (resourceData.tags && resourceData.tags.length > 0) {
@@ -259,71 +303,32 @@ async function searchResources(criteria = {}) {
     throw new ValidationError(`Invalid sortBy. Must be one of: ${validSortFields.join(', ')}`);
   }
 
-  // If keyword provided, use semantic search
-  if (criteria.keyword && criteria.keyword.trim().length > 0) {
-    let resources = await searchResourcesBySemantic(criteria.keyword, {
-      limit: Math.floor(limit * 1.5), // Get more results for filtering (ensure integer)
-      minScore: 0.92 // Adjusted threshold for current dummy data (changed from 0.75)
-    });
-
-    // Apply additional filters
-    if (criteria.tags && criteria.tags.length > 0) {
-      resources = resources.filter(r =>
-        r.tags && r.tags.some(tag => criteria.tags.includes(tag.id))
-      );
-    }
-
-    if (criteria.areaId) {
-      resources = resources.filter(r => r.area && r.area.id === criteria.areaId);
-    } else if (criteria.areaIds && criteria.areaIds.length > 0) {
-      resources = resources.filter(r =>
-        r.area && criteria.areaIds.includes(r.area.id)
-      );
-    }
-
-    // Apply sorting
-    if (criteria.sortBy) {
-      resources.sort((a, b) => {
-        if (criteria.sortBy === 'feedback_count') {
-          return b.feedback_count - a.feedback_count;
-        } else if (criteria.sortBy === 'view_count') {
-          return b.view_count - a.view_count;
-        } else if (criteria.sortBy === 'created_at') {
-          return new Date(b.created_at) - new Date(a.created_at);
-        }
-        return 0;
-      });
-    }
-
-    // Apply pagination
-    const total = resources.length;
-    const startIndex = (page - 1) * limit;
-    const paginatedResources = resources.slice(startIndex, startIndex + limit);
-
-    return {
-      resources: paginatedResources,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-        hasMore: startIndex + limit < total
-      }
-    };
-  }
-
-  // Otherwise, use traditional search
+  // Use traditional keyword-based search (DAO handles CONTAINS matching)
+  // Semantic search is only available through the dedicated /api/resources/search/semantic endpoint
+  const skip = (page - 1) * limit;
+  
   const searchResult = await resourceDAO.search({
     tags: criteria.tags,
     areaId: criteria.areaId,
     areaIds: criteria.areaIds,
     keyword: criteria.keyword,
     sortBy: criteria.sortBy,
-    page,
-    limit
+    skip: skip,
+    limit: limit
   });
 
-  return searchResult;
+  // Format response with pagination info
+  return {
+    resources: searchResult.resources,
+    pagination: {
+      total: searchResult.total,
+      page: page,
+      limit: limit,
+      totalPages: Math.ceil(searchResult.total / limit),
+      hasMore: skip + limit < searchResult.total
+    },
+    suggestions: searchResult.suggestions
+  };
 }
 
 /**

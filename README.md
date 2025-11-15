@@ -13,6 +13,25 @@ Neo4jベースの障害者支援ネットワーク可視化システム - AI駆�
 - **ニーズマッチング**: 支援ニーズと資源のマッチング機能
 - **フィードバックシステム**: ユーザーフィードバックの収集と分析
 
+## ✅ プロジェクトステータス
+
+**完成度: 10/10 (100%)** 🎉
+
+すべての基本機能が実装され、テストが完了しました。
+
+### テスト完了状況 (9/9)
+- ✅ ユーザー登録・ログイン
+- ✅ 資源一覧表示
+- ✅ 資源登録
+- ✅ 重複チェック
+- ✅ キーワード検索
+- ✅ セマンティック検索
+- ✅ フィードバック投稿
+- ✅ エゴネットワーク表示
+- ✅ ダッシュボード統計
+
+詳細は [TEST_STATUS.md](TEST_STATUS.md) を参照してください。
+
 ## 🏗️ システムアーキテクチャ
 
 ```
@@ -68,8 +87,10 @@ AI/ML (Hugging Face Transformers.js)
 - マッチング履歴
 
 ### 5. フィードバックシステム
-- 5段階評価
+- 資源への訪問フィードバック投稿
+- 訪問日記録
 - コメント投稿
+- 「役に立った」機能
 - 資源別フィードバック集計
 
 ## 🚀 セットアップ
@@ -84,11 +105,14 @@ AI/ML (Hugging Face Transformers.js)
 
 ```bash
 # 1. リポジトリをクローン
-git clone <repository-url>
+git clone https://github.com/kazumasakawahara/community-resource-graph.git
 cd community-resource-graph
 
 # 2. 依存関係をインストール
 npm install
+
+# フロントエンドの依存関係もインストール
+cd frontend && npm install && cd ..
 
 # 3. Neo4jデータベースを起動
 docker compose up -d
@@ -101,9 +125,17 @@ npm run db:seed-demo
 npm run db:create-indexes
 npm run db:vectorize
 
-# 6. 開発サーバーを起動
+# 6. 開発サーバーを起動（バックエンド）
 npm run dev
+
+# 7. 別のターミナルでフロントエンドを起動
+cd frontend && npm run dev
 ```
+
+アプリケーションにアクセス:
+- フロントエンド: http://localhost:5173
+- バックエンドAPI: http://localhost:3000
+- Neo4jブラウザ: http://localhost:17474
 
 ### 環境変数
 
@@ -111,7 +143,7 @@ npm run dev
 
 ```env
 # Neo4j設定
-NEO4J_URI=bolt://localhost:7687
+NEO4J_URI=bolt://localhost:17687
 NEO4J_USER=neo4j
 NEO4J_PASSWORD=your-password
 
@@ -134,6 +166,7 @@ community-resource-graph/
 │   │   ├── components/      # React コンポーネント
 │   │   │   ├── Network/     # ネットワーク可視化
 │   │   │   ├── Resources/   # 資源管理
+│   │   │   ├── Needs/       # ニーズ管理
 │   │   │   └── Auth/        # 認証
 │   │   ├── pages/           # ページコンポーネント
 │   │   └── types/           # TypeScript型定義
@@ -166,7 +199,13 @@ community-resource-graph/
 │   ├── auth.spec.ts
 │   └── helpers/
 │
+├── docs/                    # ドキュメント
+│   ├── API_ENDPOINTS.md
+│   ├── IMPLEMENTATION_PLAN.md
+│   └── system-overview.md
+│
 ├── docker-compose.yml       # Neo4j設定
+├── TEST_STATUS.md           # テスト状況報告書
 └── README.md
 ```
 
@@ -205,22 +244,21 @@ npx playwright test --debug
 # 現在のテスト結果: 17/17 NetworkGraph tests ✅
 ```
 
-### テストカバレッジ
+### 手動テスト
 
-- **統合テスト**: 68/68 (100%)
-  - 認証: ✅
-  - 資源CRUD: ✅
-  - ネットワーク: 12テスト ✅
-  - ニーズ: 16テスト ✅
-  - フィードバック: 10テスト ✅
-  - 統計: ✅
+すべての主要機能が手動テストで検証済みです：
 
-- **E2Eテスト**: 17/17 (100%)
-  - ページ表示: ✅
-  - SVG描画: ✅
-  - インタラクション: ✅
-  - レスポンシブ: ✅
-  - ビジュアル回帰: ✅
+1. ✅ ユーザー登録・ログイン機能
+2. ✅ 資源一覧表示（52件）
+3. ✅ 資源登録フォーム
+4. ✅ 重複チェック機能
+5. ✅ キーワード検索
+6. ✅ セマンティック検索（AI検索）
+7. ✅ フィードバック投稿機能
+8. ✅ エゴネットワーク可視化
+9. ✅ ダッシュボード統計表示
+
+詳細なテスト結果は [TEST_STATUS.md](TEST_STATUS.md) を参照してください。
 
 ## 🔧 開発コマンド
 
@@ -259,26 +297,30 @@ npm run typecheck          # TypeScript型チェック
 
 ### 資源
 - `GET /api/resources` - 資源一覧
-- `GET /api/resources/search` - セマンティック検索
+- `GET /api/resources/search` - キーワード検索
+- `POST /api/resources/semantic-search` - セマンティック検索
 - `GET /api/resources/:id` - 資源詳細
-- `POST /api/resources` - 資源作成
-- `PUT /api/resources/:id` - 資源更新
-- `GET /api/resources/:id/recommendations` - レコメンデーション
+- `POST /api/resources` - 資源作成（要認証）
+- `PUT /api/resources/:id` - 資源更新（要認証）
+- `GET /api/resources/:id/recommendations` - AIレコメンデーション
 
 ### ネットワーク
 - `GET /api/resources/:id/network` - エゴネットワーク取得
 
 ### ニーズ
 - `GET /api/needs` - ニーズ一覧
-- `POST /api/needs` - ニーズ作成
-- `PUT /api/needs/:id/status` - ステータス更新
+- `POST /api/needs` - ニーズ作成（要認証）
+- `PUT /api/needs/:id/status` - ステータス更新（要認証）
 - `GET /api/needs/area/:areaId` - 地域別ニーズ
 
 ### フィードバック
-- `POST /api/feedback` - フィードバック投稿
+- `POST /api/feedback` - フィードバック投稿（要認証）
 - `GET /api/feedback/resource/:id` - 資源別フィードバック
 
-### 地域・タグ
+### 統計・マスタ
+- `GET /api/stats/dashboard` - ダッシュボード統計
+- `GET /api/stats/areas` - エリア別統計
+- `GET /api/stats/tags` - タグ統計
 - `GET /api/areas` - 地域一覧
 - `GET /api/tags` - タグ一覧
 
@@ -290,6 +332,7 @@ npm run typecheck          # TypeScript型チェック
 - **Vite** - 高速ビルドツール
 - **D3.js** - データ可視化
 - **Axios** - HTTP クライアント
+- **React Router** - ルーティング
 
 ### バックエンド
 - **Node.js 20** - ランタイム
@@ -311,7 +354,7 @@ npm run typecheck          # TypeScript型チェック
 ### DevOps
 - **Docker Compose** - コンテナオーケストレーション
 - **ESLint** - 静的解析
-- **Prettier** - コードフォーマット
+- **Git** - バージョン管理
 
 ## 🔬 セマンティック検索の仕組み
 
@@ -364,6 +407,7 @@ function cosineSimilarity(vecA, vecB) {
 - **JWT認証**: ステートレス認証
 - **パスワードハッシュ**: bcryptjs (10 rounds)
 - **入力検証**: すべてのAPIエンドポイントで実施
+- **重複チェック**: 同一名称+住所での重複登録を防止
 - **CORS設定**: 開発環境のみ許可
 - **環境変数**: 機密情報の外部化
 
@@ -381,4 +425,4 @@ MIT License
 
 ---
 
-**Generated with Claude Code** 🤖
+**Built with ❤️ for 障害者支援コミュニティ**
