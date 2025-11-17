@@ -14,7 +14,7 @@
 require('dotenv').config();
 const app = require('./app');
 const neo4jDriver = require('./db/neo4j-driver');
-const { prewarmModel } = require('./services/embedding-service');
+const { testConnection } = require('./services/ollama-embedding-service');
 
 // Configuration
 const PORT = process.env.PORT || 3000;
@@ -28,11 +28,11 @@ async function startServer() {
     await neo4jDriver.verifyConnectivity();
     console.log('✓ Neo4j connection successful');
 
-    // Pre-warm embedding model (non-blocking)
-    console.log('Pre-warming embedding model...');
-    prewarmModel().catch(error => {
-      console.warn('⚠️  Embedding model pre-warming failed:', error.message);
-      console.warn('   Model will be initialized on first use (may cause delay)');
+    // Test Ollama connection (non-blocking)
+    console.log('Testing Ollama embedding service...');
+    testConnection().catch(error => {
+      console.warn('⚠️  Ollama connection test failed:', error.message);
+      console.warn('   Semantic search may not work correctly');
     });
 
     // Start Express server
@@ -47,9 +47,9 @@ async function startServer() {
 
   Health check: http://localhost:${PORT}/health
   API Base URL: http://localhost:${PORT}/api
-  
-  🔥 Embedding model pre-warming in progress...
-     (First search may be slower if not yet ready)
+
+  🤖 Ollama embedding service: ${process.env.OLLAMA_EMBEDDING_MODEL || 'mxbai-embed-large'}
+  📊 Vector dimensions: 1024
 ========================================
       `);
     });

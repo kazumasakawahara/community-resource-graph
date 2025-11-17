@@ -9,7 +9,7 @@
 
 const resourceDAO = require('../dao/resource-dao');
 const areaDAO = require('../dao/area-dao');
-const { generateEmbedding } = require('./embedding-service');
+const { generateEmbedding, cosineSimilarity } = require('./ollama-embedding-service');
 const { expandQuery } = require('./query-expansion-service');
 const neo4jDriver = require('../db/neo4j-driver');
 const neo4j = require('neo4j-driver');
@@ -146,11 +146,13 @@ async function createResource(resourceData, userId) {
  * Automatically increments view_count when resource is fetched.
  *
  * @param {string} resourceId - Resource ID
+ * @param {Object} options - Retrieval options
+ * @param {boolean} [options.includeCoUtilized=false] - Include co-utilized resources
  * @returns {Promise<Object>} Resource detail object
  * @throws {NotFoundError} If resource not found
  * @throws {ValidationError} If resourceId is missing
  */
-async function getResourceById(resourceId) {
+async function getResourceById(resourceId, options = {}) {
   if (!resourceId) {
     throw new ValidationError('Resource ID is required');
   }
@@ -164,11 +166,26 @@ async function getResourceById(resourceId) {
   // Increment view count
   await resourceDAO.incrementViewCount(resourceId);
 
-  // Update view_count in returned object
-  return {
+  // Base resource object with updated view count
+  const result = {
     ...resource,
     view_count: resource.view_count + 1
   };
+
+  // Include co-utilized resources if requested
+  if (options.includeCoUtilized === true) {
+    const patternDetectionService = require('./pattern-detection-service');
+    const coUtilizedResources = await patternDetectionService.getCoUtilizedResources(
+      resourceId,
+      {
+        minStrength: 0.2,
+        limit: 5
+      }
+    );
+    result.coUtilizedResources = coUtilizedResources;
+  }
+
+  return result;
 }
 
 /**
@@ -455,13 +472,12 @@ async function suggestTags(limit = 10) {
  *
  * @param {string} query - Search query in natural language
  * @param {Object} options - Search options
- * @param {number} [options.limit=20] - Maximum number of results
- * @param {number} [options.threshold=0.5] - Minimum similarity threshold (0-1)
+ * @param {number} [options.limit=5] - Maximum number of results (default: 5, max: 10)
+ * @param {number} [options.threshold=0.65] - Minimum similarity threshold (0-1, default: 0.65 for high relevance)
  * @returns {Promise<Array>} Array of resources with similarity scores
  */
 async function semanticSearch(query, options = {}) {
-  const { limit = 20, threshold = 0.5 } = options;
-  const { cosineSimilarity } = require('./embedding-service');
+  const { limit = 5, threshold = 0.65 } = options;
 
   console.log(`🔍 Semantic search query: "${query}"`);
 
@@ -478,7 +494,6 @@ async function semanticSearch(query, options = {}) {
       // Get additional data
       OPTIONAL MATCH (r)-[:LOCATED_IN]->(a:Area)
       OPTIONAL MATCH (r)-[:HAS_TAG]->(t:Tag)
-      OPTIONAL MATCH (r)-[:HAS_TYPE]->(type:ResourceType)
 
       RETURN
         r.id AS id,
@@ -491,7 +506,7 @@ async function semanticSearch(query, options = {}) {
         r.feedback_count AS feedback_count,
         r.view_count AS view_count,
         r.created_at AS created_at,
-        type.name AS type,
+        r.type AS type,
         {
           id: a.id,
           name: a.name,
@@ -547,7 +562,6 @@ async function semanticSearch(query, options = {}) {
  */
 async function getRecommendations(resourceId, options = {}) {
   const { limit = 10, threshold = 0.6 } = options;
-  const { cosineSimilarity } = require('./embedding-service');
 
   console.log(`💡 Getting recommendations for resource: ${resourceId}`);
 
@@ -576,7 +590,6 @@ async function getRecommendations(resourceId, options = {}) {
       // Get additional data
       OPTIONAL MATCH (r)-[:LOCATED_IN]->(a:Area)
       OPTIONAL MATCH (r)-[:HAS_TAG]->(t:Tag)
-      OPTIONAL MATCH (r)-[:HAS_TYPE]->(type:ResourceType)
 
       // Check if already connected
       OPTIONAL MATCH (target)-[rel:CONNECTS_TO]-(r)
@@ -592,7 +605,7 @@ async function getRecommendations(resourceId, options = {}) {
         r.feedback_count AS feedback_count,
         r.view_count AS view_count,
         r.created_at AS created_at,
-        type.name AS type,
+        r.type AS type,
         {
           id: a.id,
           name: a.name,

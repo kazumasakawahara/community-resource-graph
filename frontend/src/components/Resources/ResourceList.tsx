@@ -150,7 +150,7 @@ export const ResourceList: React.FC = () => {
       setError('');
 
       console.log('📡 Sending semantic search API request');
-      const response = await resourcesAPI.semanticSearch(semanticQuery, 20, 0.5);
+      const response = await resourcesAPI.semanticSearch(semanticQuery, 5, 0.65);
       console.log('📥 Semantic search response:', response);
 
       setResources(response.data.resources);

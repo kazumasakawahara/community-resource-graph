@@ -22,7 +22,8 @@
     "lint": "eslint src/**/*.ts",
     "format": "prettier --write \"src/**/*.ts\"",
     "db:create-indexes": "node scripts/run-create-indexes.js",
-    "db:reset": "node scripts/reset-database.js"
+    "db:reset": "node scripts/reset-database.js",
+    "detect:patterns": "node scripts/run-pattern-detection.js"
   },
   "keywords": [
     "neo4j",

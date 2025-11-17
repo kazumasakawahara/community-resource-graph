@@ -51,16 +51,23 @@ async function createResource(req, res, next) {
  * Get resource by ID
  * GET /api/resources/:id
  *
+ * Query parameters:
+ * - includeCoUtilized: Include co-utilized resources (boolean, default: false)
+ *
  * @param {Object} req - Express request object
  * @param {string} req.params.id - Resource ID
+ * @param {string} [req.query.includeCoUtilized] - Include co-utilized resources
  * @param {Object} res - Express response object
  */
 async function getResourceById(req, res, next) {
   try {
     const resourceId = req.params.id;
+    const includeCoUtilized = req.query.includeCoUtilized === 'true';
 
     // Get resource (view count is automatically incremented)
-    const resource = await resourceService.getResourceById(resourceId);
+    const resource = await resourceService.getResourceById(resourceId, {
+      includeCoUtilized
+    });
 
     res.status(200).json({
       success: true,

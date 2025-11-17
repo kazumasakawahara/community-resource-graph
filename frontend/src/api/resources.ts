@@ -48,7 +48,7 @@ export const resourcesAPI = {
     return response.data;
   },
 
-  semanticSearch: async (query: string, limit: number = 20, threshold: number = 0.5) => {
+  semanticSearch: async (query: string, limit: number = 5, threshold: number = 0.65) => {
     const response = await apiClient.get('/resources/search/semantic', {
       params: { query, limit, threshold }
     });

@@ -21,14 +21,14 @@ async function createVectorIndex() {
     }
 
     // Create vector index
-    // multilingual-e5-small produces 384-dimensional vectors
+    // nomic-embed-text produces 768-dimensional vectors
     await session.run(`
       CREATE VECTOR INDEX resource_embedding_index IF NOT EXISTS
       FOR (r:Resource)
       ON r.embedding
       OPTIONS {
         indexConfig: {
-          \`vector.dimensions\`: 384,
+          \`vector.dimensions\`: 768,
           \`vector.similarity_function\`: 'cosine'
         }
       }
@@ -36,7 +36,7 @@ async function createVectorIndex() {
 
     console.log('✅ Vector index created successfully');
     console.log('   - Index name: resource_embedding_index');
-    console.log('   - Dimensions: 384');
+    console.log('   - Dimensions: 768');
     console.log('   - Similarity function: cosine');
 
   } catch (error) {

@@ -19,12 +19,13 @@ const router = express.Router();
 /**
  * GET /api/resources/search/semantic
  * Semantic search using vector embeddings (must be before /search)
+ * Default: limit=5, threshold=0.65 for high-relevance results
  */
 router.get(
   '/search/semantic',
   [
     query('query').notEmpty().withMessage('Query is required'),
-    query('limit').optional().isInt({ min: 1, max: 100 }),
+    query('limit').optional().isInt({ min: 1, max: 10 }),
     query('threshold').optional().isFloat({ min: 0, max: 1 }),
     handleValidationErrors
   ],

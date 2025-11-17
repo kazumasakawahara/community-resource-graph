@@ -7,8 +7,9 @@ Neo4jベースの障害者支援ネットワーク可視化システム - AI駆�
 このシステムは、障害者支援に関わる地域資源（施設、サービス、支援団体）をグラフデータベースで管理し、以下の機能を提供します：
 
 - **グラフベースの資源管理**: Neo4jによる関係性の可視化
-- **セマンティック検索**: AI埋め込みモデルによる自然言語検索
+- **セマンティック検索**: Ollama埋め込みモデルによる自然言語検索
 - **インテリジェントレコメンデーション**: ベクトル類似度ベースの関連資源推薦
+- **利用パターン自動検出**: フィードバックデータから共利用パターンを検出
 - **ネットワーク可視化**: D3.jsによるインタラクティブな関係性表示
 - **ニーズマッチング**: 支援ニーズと資源のマッチング機能
 - **フィードバックシステム**: ユーザーフィードバックの収集と分析
@@ -53,10 +54,11 @@ Database (Neo4j Graph Database)
 ├── ベクトルインデックス (768次元)
 └── Cypherクエリによるグラフ操作
 
-AI/ML (Hugging Face Transformers.js)
-├── multilingual-e5-small モデル
-├── セマンティック埋め込み生成
-└── コサイン類似度計算
+AI/ML (Ollama)
+├── mxbai-embed-large モデル
+├── セマンティック埋め込み生成（1024次元）
+├── コサイン類似度計算
+└── 利用パターン検出
 ```
 
 ## ✨ 主要機能
@@ -92,6 +94,13 @@ AI/ML (Hugging Face Transformers.js)
 - コメント投稿
 - 「役に立った」機能
 - 資源別フィードバック集計
+
+### 6. 利用パターン自動検出
+- フィードバックデータから共利用パターンを検出
+- CO_UTILIZEDリレーションシップの自動生成・更新
+- 共利用強度（strength）と共通ユーザー数（users_count）の算出
+- バッチ処理スクリプトによる定期実行
+- API統合による共利用資源の動的取得
 
 ## 🚀 セットアップ
 
@@ -223,7 +232,9 @@ npm test -- tests/integration/resource.test.js
 # カバレッジ付き
 npm test -- --coverage
 
-# 現在のテスト結果: 68/68 (100%) ✅
+# 現在のテスト結果: 93/93 (100%) ✅
+# - 統合テスト: 68件
+# - 利用パターン検出: 25件（ユニット15件 + 統合10件）
 ```
 
 ### E2Eテスト (Playwright)
@@ -278,6 +289,11 @@ npm run db:seed-demo        # デモデータ投入
 npm run db:create-indexes   # インデックス作成
 npm run db:vectorize        # ベクトル化実行
 
+# パターン検出
+npm run detect:patterns     # 利用パターン自動検出実行
+npm run detect:patterns -- --min-users=3  # 最小共通ユーザー数を指定
+npm run detect:patterns -- --dry-run      # ドライラン（検出のみ）
+
 # テスト
 npm test                    # 統合テスト
 npm run test:e2e           # E2Eテスト
@@ -300,6 +316,7 @@ npm run typecheck          # TypeScript型チェック
 - `GET /api/resources/search` - キーワード検索
 - `POST /api/resources/semantic-search` - セマンティック検索
 - `GET /api/resources/:id` - 資源詳細
+- `GET /api/resources/:id?includeCoUtilized=true` - 資源詳細（共利用資源含む）
 - `POST /api/resources` - 資源作成（要認証）
 - `PUT /api/resources/:id` - 資源更新（要認証）
 - `GET /api/resources/:id/recommendations` - AIレコメンデーション
@@ -342,9 +359,9 @@ npm run typecheck          # TypeScript型チェック
 - **bcryptjs** - パスワードハッシュ
 
 ### AI/ML
-- **Transformers.js** - Hugging Face ライブラリ
-- **multilingual-e5-small** - 多言語埋め込みモデル
-- **384次元ベクトル** - セマンティック表現
+- **Ollama** - ローカルLLM実行環境
+- **mxbai-embed-large** - 多言語埋め込みモデル（1024次元）
+- **コサイン類似度計算** - JavaScript実装
 
 ### テスト
 - **Jest** - 統合テストフレームワーク
