@@ -38,6 +38,8 @@ temp/
 
 # Scripts
 organize_project.sh
+start.sh
+stop.sh
 
 # Claude/AI tools
 .claude/
